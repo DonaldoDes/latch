@@ -4,7 +4,7 @@ Thank you for your interest in contributing to latch.
 
 ## Prerequisites
 
-- **Rust stable** (install via [rustup](https://rustup.rs/))
+- **Rust stable** (MSRV: 1.85) (install via [rustup](https://rustup.rs/))
 - **Cargo** (comes with Rust)
 
 ## Setup
@@ -66,6 +66,30 @@ Optional body with more detail.
    - Link to the related issue (`Closes #XXX`)
    - All checklist items checked
 5. Wait for review
+
+## Versioning & Publishing
+
+This project follows [semver](https://semver.org/) (Semantic Versioning):
+
+- **MAJOR**: breaking API changes
+- **MINOR**: new features, backward compatible
+- **PATCH**: bug fixes
+
+Releases are published to [crates.io](https://crates.io/crates/latch) via the release workflow. The `CARGO_REGISTRY_TOKEN` secret is required for publishing.
+
+## Dependency Policy
+
+Dependencies are managed with two layers of protection:
+
+- **Dependabot** monitors for outdated and vulnerable dependencies, opening PRs weekly
+- **cargo deny** enforces license allowlists, advisory checks, and source restrictions
+
+Run locally:
+
+```bash
+cargo install cargo-deny --locked
+cargo deny check
+```
 
 ## Code of Conduct
 
