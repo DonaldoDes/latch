@@ -41,8 +41,8 @@ pub async fn run_server(paths: &SessionPaths, cmd: &str, session_name: &str) -> 
     let pty_writer = Arc::new(std::sync::Mutex::new(
         pair.master.take_writer().context("PTY take writer")?,
     ));
-    // Keep master alive so the PTY fd stays open
-    let _master = pair.master;
+    // Keep master alive so the PTY fd stays open; wrapped in Mutex for Sync
+    let master = Arc::new(std::sync::Mutex::new(pair.master));
 
     // Ring buffer
     let ring_buffer = Arc::new(RwLock::new(RingBuffer::new(
@@ -72,7 +72,9 @@ pub async fn run_server(paths: &SessionPaths, cmd: &str, session_name: &str) -> 
                     rt.block_on(async {
                         let mut rb = ring_clone.write().await;
                         rb.push(&data);
-                        let _ = rb.save(&history_path);
+                        if let Err(e) = rb.save(&history_path) {
+                            eprintln!("[latch] warning: failed to save ring buffer: {e}");
+                        }
                     });
                     // Broadcast to connected clients (ignore if no receivers)
                     let _ = tx_clone.send(data);
@@ -94,6 +96,7 @@ pub async fn run_server(paths: &SessionPaths, cmd: &str, session_name: &str) -> 
         let tx = tx.clone();
         let ring_buffer = ring_buffer.clone();
         let pty_writer = pty_writer.clone();
+        let master_ref = master.clone();
         let meta_path = paths.meta.clone();
         let socket_path = paths.socket.clone();
 
@@ -104,11 +107,19 @@ pub async fn run_server(paths: &SessionPaths, cmd: &str, session_name: &str) -> 
                         let tx = tx.clone();
                         let ring_buffer = ring_buffer.clone();
                         let pty_writer = pty_writer.clone();
+                        let master_ref = master_ref.clone();
                         let meta_path = meta_path.clone();
 
                         tokio::spawn(async move {
-                            if let Err(e) =
-                                handle_client(stream, tx, ring_buffer, pty_writer, &meta_path).await
+                            if let Err(e) = handle_client(
+                                stream,
+                                tx,
+                                ring_buffer,
+                                pty_writer,
+                                master_ref,
+                                &meta_path,
+                            )
+                            .await
                             {
                                 // Client disconnected — silently remove
                                 let _ = e;
@@ -139,12 +150,16 @@ pub async fn run_server(paths: &SessionPaths, cmd: &str, session_name: &str) -> 
     }
 
     // Update meta.json
-    let _ = SessionMeta::update_status(&paths.meta, SessionStatus::Dead);
+    if let Err(e) = SessionMeta::update_status(&paths.meta, SessionStatus::Dead) {
+        eprintln!("[latch] warning: failed to update session status to dead: {e}");
+    }
 
     // Save final ring buffer
     {
         let rb = ring_buffer.read().await;
-        let _ = rb.save(&paths.history);
+        if let Err(e) = rb.save(&paths.history) {
+            eprintln!("[latch] warning: failed to save final ring buffer: {e}");
+        }
     }
 
     // Give clients a moment to receive SessionDead
@@ -163,6 +178,7 @@ async fn handle_client(
     tx: broadcast::Sender<Vec<u8>>,
     ring_buffer: Arc<RwLock<RingBuffer>>,
     pty_writer: Arc<std::sync::Mutex<Box<dyn std::io::Write + Send>>>,
+    master: Arc<std::sync::Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
     meta_path: &Path,
 ) -> Result<()> {
     let (mut reader, mut writer) = stream.into_split();
@@ -174,7 +190,9 @@ async fn handle_client(
     }
 
     // Update meta.json to attached
-    let _ = SessionMeta::update_status(meta_path, SessionStatus::Attached);
+    if let Err(e) = SessionMeta::update_status(meta_path, SessionStatus::Attached) {
+        eprintln!("[latch] warning: failed to update session status to attached: {e}");
+    }
 
     // Send history replay
     {
@@ -219,10 +237,16 @@ async fn handle_client(
                 }
             }
             Ok(ClientMessage::Resize { cols, rows }) => {
-                // Resize is handled server-side only, not broadcast
-                // We would need the master pty fd to ioctl TIOCSWINSZ
-                // For now, this is a placeholder
-                let _ = (cols, rows);
+                if let Ok(m) = master.lock() {
+                    if let Err(e) = m.resize(PtySize {
+                        rows,
+                        cols,
+                        pixel_width: 0,
+                        pixel_height: 0,
+                    }) {
+                        eprintln!("[latch] warning: failed to resize PTY: {e}");
+                    }
+                }
             }
             Ok(ClientMessage::Detach) => {
                 break;
@@ -238,10 +262,14 @@ async fn handle_client(
     }
 
     output_task.abort();
+    // Yield to let the aborted task's receiver be dropped
+    tokio::task::yield_now().await;
 
     // If no more subscribers, update to detached
     if tx.receiver_count() <= 1 {
-        let _ = SessionMeta::update_status(meta_path, SessionStatus::Detached);
+        if let Err(e) = SessionMeta::update_status(meta_path, SessionStatus::Detached) {
+            eprintln!("[latch] warning: failed to update session status to detached: {e}");
+        }
     }
 
     Ok(())

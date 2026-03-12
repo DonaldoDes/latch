@@ -33,14 +33,21 @@ pub struct SessionPaths {
     pub meta: PathBuf,
 }
 
-/// Returns the base directory for all sessions: ~/.local/share/latch/sessions/
+/// Returns the base directory for all sessions using platform-appropriate paths.
+/// Uses `directories::ProjectDirs` to resolve the data directory:
+/// - macOS: ~/Library/Application Support/latch/sessions/
+/// - Linux: ~/.local/share/latch/sessions/
+///
+/// Returns an error path if HOME is unset (ProjectDirs returns None).
 pub fn sessions_base_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    PathBuf::from(home)
-        .join(".local")
-        .join("share")
-        .join("latch")
-        .join("sessions")
+    match directories::ProjectDirs::from("", "", "latch") {
+        Some(proj_dirs) => proj_dirs.data_dir().join("sessions"),
+        None => {
+            eprintln!("[latch] error: cannot determine data directory (HOME unset?)");
+            // Return a path that will fail on use rather than silently using /tmp
+            PathBuf::from("/nonexistent-latch-data-dir/sessions")
+        }
+    }
 }
 
 /// Returns the base directory for sessions, overridable for tests via LATCH_DATA_DIR
@@ -73,10 +80,13 @@ impl SessionPaths {
         }
     }
 
-    /// Create the session directory if it doesn't exist
+    /// Create the session directory if it doesn't exist, with mode 0700
     pub fn ensure_dir(&self) -> Result<()> {
         std::fs::create_dir_all(&self.dir)
-            .with_context(|| format!("Failed to create session dir: {:?}", self.dir))
+            .with_context(|| format!("Failed to create session dir: {:?}", self.dir))?;
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&self.dir, std::fs::Permissions::from_mode(0o700))
+            .with_context(|| format!("Failed to set permissions on session dir: {:?}", self.dir))
     }
 }
 

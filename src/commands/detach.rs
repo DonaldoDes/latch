@@ -45,9 +45,8 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn resolve_detach_target_from_env() {
-        // Note: this test manipulates env vars, not safe for parallel
-        // but acceptable for unit tests
         std::env::set_var("LATCH_SESSION", "envsession");
         let target = resolve_detach_target(None).unwrap();
         assert_eq!(target, "envsession");
@@ -55,6 +54,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn resolve_detach_target_error_when_no_env() {
         std::env::remove_var("LATCH_SESSION");
         let result = resolve_detach_target(None);
@@ -64,6 +64,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn resolve_detach_argument_takes_priority_over_env() {
         std::env::set_var("LATCH_SESSION", "envsession");
         let target = resolve_detach_target(Some("explicit".to_string())).unwrap();
