@@ -13,8 +13,8 @@ pub struct Cli {
 pub enum Commands {
     /// Create a new session
     New {
-        /// Session name
-        name: String,
+        /// Session name (auto-generated if omitted)
+        name: Option<String>,
         /// Command to run (default: $SHELL)
         command: Option<String>,
     },
@@ -24,7 +24,10 @@ pub enum Commands {
         session: String,
     },
     /// Detach from the current session
-    Detach,
+    Detach {
+        /// Session name or ID (reads $LATCH_SESSION if omitted)
+        session: Option<String>,
+    },
     /// List all sessions
     List,
     /// Kill a session

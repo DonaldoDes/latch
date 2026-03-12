@@ -1,34 +1,29 @@
-mod cli;
-mod client;
-mod server;
-mod session;
-mod tui;
-
 use anyhow::Result;
 use clap::Parser;
-use cli::{Cli, Commands};
+use latch::cli::{Cli, Commands};
+use latch::commands;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
         Some(Commands::New { name, command }) => {
-            eprintln!("TODO: create session '{}' with command {:?}", name, command);
+            commands::new::run(name, command)?;
         }
         Some(Commands::Attach { session }) => {
-            eprintln!("TODO: attach to session '{}'", session);
+            commands::attach::run(&session)?;
         }
-        Some(Commands::Detach) => {
-            eprintln!("TODO: detach from current session");
+        Some(Commands::Detach { session }) => {
+            commands::detach::run(session)?;
         }
         Some(Commands::List) => {
-            eprintln!("TODO: list sessions");
+            commands::list::run()?;
         }
         Some(Commands::Kill { session }) => {
-            eprintln!("TODO: kill session '{}'", session);
+            commands::kill::run(&session)?;
         }
         Some(Commands::History { session }) => {
-            eprintln!("TODO: show history for session '{}'", session);
+            commands::history::run(&session)?;
         }
         Some(Commands::Rename { session, new_name }) => {
             eprintln!("TODO: rename session '{}' to '{}'", session, new_name);
