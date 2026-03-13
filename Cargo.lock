@@ -708,6 +708,7 @@ dependencies = [
  "assert_cmd",
  "chrono",
  "clap",
+ "crossterm",
  "directories",
  "libc",
  "portable-pty",

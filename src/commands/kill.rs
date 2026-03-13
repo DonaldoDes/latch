@@ -2,12 +2,34 @@ use anyhow::Result;
 
 use crate::session::resolve_session;
 
+/// Kill a session by its resolved ID (used by TUI)
+pub fn run_by_id(session_id: &str) -> Result<()> {
+    let paths = crate::session::SessionPaths::new(session_id);
+    let meta_path = &paths.meta;
+    if !meta_path.exists() {
+        anyhow::bail!("Session '{}' not found", session_id);
+    }
+    let meta = crate::session::SessionMeta::read_from(meta_path)?;
+    kill_session(&meta, &paths)?;
+    println!("Session '{}' killed and cleaned up", meta.name);
+    Ok(())
+}
+
 /// Run `latch kill <name|id>`
 /// Sends SIGTERM, waits 3s, then SIGKILL if still alive. Removes the session directory.
 pub fn run(target: &str) -> Result<()> {
     let (id, meta) = resolve_session(target)?;
     let paths = crate::session::SessionPaths::new(&id);
 
+    kill_session(&meta, &paths)?;
+    println!("Session '{}' killed and cleaned up", target);
+    Ok(())
+}
+
+fn kill_session(
+    meta: &crate::session::SessionMeta,
+    paths: &crate::session::SessionPaths,
+) -> Result<()> {
     let pid = meta.pid as i32;
 
     // Send SIGTERM
@@ -38,7 +60,6 @@ pub fn run(target: &str) -> Result<()> {
         std::fs::remove_dir_all(&paths.dir)?;
     }
 
-    println!("Session '{}' killed and cleaned up", target);
     Ok(())
 }
 

@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use latch::cli::{Cli, Commands};
 use latch::commands;
+use latch::tui::state::Action;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -26,11 +27,21 @@ fn main() -> Result<()> {
             commands::history::run(&session)?;
         }
         Some(Commands::Rename { session, new_name }) => {
-            eprintln!("TODO: rename session '{}' to '{}'", session, new_name);
+            commands::rename::run(&session, &new_name)?;
         }
         None => {
             // No subcommand: launch TUI picker
-            eprintln!("TODO: launch TUI session picker");
+            if let Some(action) = latch::tui::run()? {
+                match action {
+                    Action::Attach { session_id } => {
+                        commands::attach::run(&session_id)?;
+                    }
+                    Action::NewSession { name } => {
+                        commands::new::run(Some(name), None)?;
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 

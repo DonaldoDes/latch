@@ -28,6 +28,7 @@ directories = "5"
 anyhow = "1"
 libc = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
+crossterm = "0.28"
 rand = "0.8"
 
 [dev-dependencies]
