@@ -17,7 +17,7 @@ name = "latch"
 path = "src/main.rs"
 
 [dependencies]
-portable-pty = "0.8"
+portable-pty = "0.9"
 tokio = { version = "1", features = ["full"] }
 ratatui = "0.29"
 clap = { version = "4", features = ["derive"] }
