@@ -156,7 +156,10 @@ pub fn resolve_session_in(base: &Path, target: &str) -> Result<(String, SessionM
     match matches.len() {
         0 => anyhow::bail!("No session found matching '{}'", target),
         1 => {
-            let meta = matches.into_iter().next().unwrap();
+            let meta = matches
+                .into_iter()
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("unexpected empty matches"))?;
             Ok((meta.id.clone(), meta))
         }
         _ => anyhow::bail!(

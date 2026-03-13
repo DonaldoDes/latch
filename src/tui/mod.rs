@@ -110,6 +110,7 @@ pub fn run() -> Result<Option<Action>> {
     let mut last_refresh = std::time::Instant::now();
 
     let result = loop {
+        app.maybe_clear_error();
         terminal.draw(|frame| ui::render(frame, &mut app))?;
 
         // Poll for events with short timeout
@@ -135,7 +136,7 @@ pub fn run() -> Result<Option<Action>> {
                     Action::KillSession { session_id } => {
                         // Kill then refresh
                         if let Err(e) = crate::commands::kill::run_by_id(&session_id) {
-                            eprintln!("Kill failed: {}", e);
+                            app.set_error(format!("Kill failed: {}", e));
                         }
                         // Check if this was the current session
                         let was_current = app
@@ -149,7 +150,7 @@ pub fn run() -> Result<Option<Action>> {
                     }
                     Action::CleanupDead { session_id } => {
                         if let Err(e) = cleanup_dead(&session_id) {
-                            eprintln!("Cleanup failed: {}", e);
+                            app.set_error(format!("Cleanup failed: {}", e));
                         }
                         refresh_sessions(&mut app)?;
                     }
@@ -158,7 +159,7 @@ pub fn run() -> Result<Option<Action>> {
                         new_name,
                     } => {
                         if let Err(e) = crate::commands::rename::run_by_id(&session_id, &new_name) {
-                            eprintln!("Rename failed: {}", e);
+                            app.set_error(format!("Rename failed: {}", e));
                         }
                         refresh_sessions(&mut app)?;
                     }

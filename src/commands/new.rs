@@ -47,7 +47,13 @@ pub fn run(name: Option<String>, command: Option<String>) -> Result<()> {
     }
 
     // Run the async server (PTY + IPC loop)
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(e) => {
+            eprintln!("[latch] failed to create runtime: {e}");
+            std::process::exit(1);
+        }
+    };
     let result = rt.block_on(crate::server::run_server(&paths, &cmd, &session_name));
 
     if let Err(e) = result {

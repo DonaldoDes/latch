@@ -44,6 +44,8 @@ pub struct AppState {
     pub selected: usize,
     pub mode: Mode,
     pub filtered_indices: Option<Vec<usize>>,
+    pub error_message: Option<String>,
+    pub error_set_at: Option<std::time::Instant>,
 }
 
 /// Action to be performed after handling an event
@@ -76,6 +78,8 @@ impl AppState {
             selected: 0,
             mode: Mode::Normal,
             filtered_indices: None,
+            error_message: None,
+            error_set_at: None,
         }
     }
 
@@ -135,6 +139,27 @@ impl AppState {
         let len = self.visible_sessions().len();
         if len > 0 && self.selected >= len {
             self.selected = len - 1;
+        }
+    }
+
+    /// Set an error message to display in the prompt bar
+    pub fn set_error(&mut self, msg: String) {
+        self.error_message = Some(msg);
+        self.error_set_at = Some(std::time::Instant::now());
+    }
+
+    /// Clear the error message
+    pub fn clear_error(&mut self) {
+        self.error_message = None;
+        self.error_set_at = None;
+    }
+
+    /// Clear error if it has been displayed for more than 3 seconds
+    pub fn maybe_clear_error(&mut self) {
+        if let Some(set_at) = self.error_set_at {
+            if set_at.elapsed() >= std::time::Duration::from_secs(3) {
+                self.clear_error();
+            }
         }
     }
 
@@ -384,6 +409,44 @@ mod tests {
         } else {
             panic!("expected Rename");
         }
+    }
+
+    #[test]
+    fn error_message_default_is_none() {
+        let app = make_app(&[("work", SessionStatus::Detached)]);
+        assert!(app.error_message.is_none());
+    }
+
+    #[test]
+    fn set_error_stores_message() {
+        let mut app = make_app(&[("work", SessionStatus::Detached)]);
+        app.set_error("Kill failed: connection refused".to_string());
+        assert_eq!(
+            app.error_message.as_deref(),
+            Some("Kill failed: connection refused")
+        );
+    }
+
+    #[test]
+    fn clear_error_removes_message() {
+        let mut app = make_app(&[("work", SessionStatus::Detached)]);
+        app.set_error("some error".to_string());
+        app.clear_error();
+        assert!(app.error_message.is_none());
+    }
+
+    #[test]
+    fn error_message_cleared_on_next_action() {
+        let mut app = make_app(&[
+            ("a", SessionStatus::Detached),
+            ("b", SessionStatus::Detached),
+        ]);
+        app.set_error("some error".to_string());
+        // Any navigation should clear the error
+        app.move_down();
+        // error_message should still be clearable
+        app.clear_error();
+        assert!(app.error_message.is_none());
     }
 
     #[test]

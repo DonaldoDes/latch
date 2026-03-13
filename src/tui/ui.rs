@@ -144,6 +144,15 @@ fn render_session_list(frame: &mut Frame, app: &mut AppState, area: Rect) {
 }
 
 fn render_prompt(frame: &mut Frame, app: &AppState, area: Rect) {
+    // Show error message in red if present (takes priority over empty prompt)
+    if let Some(ref err) = app.error_message {
+        if app.mode == Mode::Normal {
+            let prompt = Paragraph::new(err.as_str()).style(Style::default().fg(Color::Red));
+            frame.render_widget(prompt, area);
+            return;
+        }
+    }
+
     let text = match &app.mode {
         Mode::NewSession { input } => format!("\u{25B6} Session name: {}_", input),
         Mode::Filter { input } => format!("\u{25B6} Filter: {}_", input),

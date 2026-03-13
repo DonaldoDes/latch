@@ -43,14 +43,26 @@ impl RingBuffer {
         }
 
         // Read version
-        let version = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
+        let version = u32::from_le_bytes(
+            bytes[4..8]
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("corrupted ring buffer header"))?,
+        );
         if version != VERSION {
             anyhow::bail!("Unsupported ring buffer version: {}", version);
         }
 
         // Read write_pos and capacity
-        let write_pos = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
-        let capacity = u64::from_le_bytes(bytes[16..24].try_into().unwrap());
+        let write_pos = u64::from_le_bytes(
+            bytes[8..16]
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("corrupted ring buffer header"))?,
+        );
+        let capacity = u64::from_le_bytes(
+            bytes[16..24]
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("corrupted ring buffer header"))?,
+        );
 
         let data = bytes[HEADER_SIZE..].to_vec();
         if data.len() != capacity as usize {
@@ -231,6 +243,42 @@ mod tests {
     #[test]
     fn default_capacity_is_one_mb() {
         assert_eq!(DEFAULT_CAPACITY, 1_048_576);
+    }
+
+    #[test]
+    fn open_returns_error_on_corrupted_version_bytes() {
+        // A file with valid magic but version bytes that are truncated (< 4 bytes for version slice)
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("corrupt_ver.bin");
+        // Build a header with valid magic, valid version, but corrupted write_pos (only 6 bytes instead of 8)
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(MAGIC);
+        bytes.extend_from_slice(&VERSION.to_le_bytes()); // valid version
+                                                         // write_pos: 8 bytes, but capacity only 4 bytes => header is 20 bytes < HEADER_SIZE
+                                                         // Actually let's make a valid-length header but with data size mismatch
+        bytes.extend_from_slice(&0u64.to_le_bytes()); // write_pos
+        bytes.extend_from_slice(&10u64.to_le_bytes()); // capacity = 10
+                                                       // But only write 5 bytes of data instead of 10
+        bytes.extend_from_slice(&[0u8; 5]);
+        std::fs::write(&path, bytes).unwrap();
+        let result = RingBuffer::open(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn open_does_not_panic_on_valid_header() {
+        // Ensure open returns Ok, not panic, when header bytes are valid
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("valid.bin");
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(MAGIC);
+        bytes.extend_from_slice(&VERSION.to_le_bytes());
+        bytes.extend_from_slice(&0u64.to_le_bytes()); // write_pos
+        bytes.extend_from_slice(&8u64.to_le_bytes()); // capacity = 8
+        bytes.extend_from_slice(&[0u8; 8]); // exactly 8 bytes of data
+        std::fs::write(&path, bytes).unwrap();
+        let result = RingBuffer::open(&path);
+        assert!(result.is_ok());
     }
 
     #[test]
